@@ -1,0 +1,43 @@
+{% extends "page.html" %}
+
+{% block main %}
+
+<div class="container">
+  <div class="row">
+    <div class="text-center">
+      {% if user.server %}
+      <a id="stop" class="btn btn-lg btn-danger">Stop My Server</a>
+      {% endif %}
+      <a id="start" class="btn btn-lg btn-success"
+        href="{{base_url}}user/{{user.name}}/"
+      >
+        My Server
+      </a>
+      {% if user.admin %}
+      <a id="admin" class="btn btn-lg btn-primary" href="{{base_url}}admin">Admin</a>
+      {% endif %}
+    </div>
+
+    <div class="text-center">
+      </br>
+      Useful links </br>
+      
+      <a target="about:blank" href="https://serendip.brynmawr.edu/oneworld/tides/explore">
+	TIDES group on Serendip </br>
+    </div>
+    
+    <div class="text-center">
+      <a target="about:blank" href="http://jupyter.cs.brynmawr.edu/hub/dblank/public/Jupyter%20Help.ipynb" >
+	Jupyter help<br/>
+    </div>
+      
+  </div>
+</div>
+{% endblock %}
+
+
+{% block script %}
+<script type="text/javascript">
+require(["home"]);
+</script>
+{% endblock %}
