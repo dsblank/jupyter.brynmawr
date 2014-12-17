@@ -1,1 +1,46 @@
 {% extends "login-base.html" %}
+
+{% block main_top %}
+
+<style type="text/css">
+  .image-container {
+  width:80%;
+  height:520px;
+  margin-left:auto;
+  margin-right:auto;
+  
+  padding-top:120px;
+  padding-right:90%;
+
+  background-image: url("https://www.brynmawr.edu/sites/default/files/styles/home_page_carousel_main/public/field/slide-image/physics_spintronics.jpg");
+  background-size: 100%;
+  background-repeat:no-repeat;
+ }
+
+  .refLinks{
+  margin-left:auto;
+  margin-right:auto;
+  width:65em;
+  }
+
+</style>
+
+{% endblock %}
+
+{% block main_bottom %}
+
+<div class="refLinks">
+  <br/>
+  <b>USEFUL LINKS</b><br/>
+
+  <a target="about:blank" href="http://jupyter.cs.brynmawr.edu/hub/dblank/public/Jupyter%20Help.ipynb"> Jupyter, </a>
+  <a target="about:blank" href="https://moodle.brynmawr.edu/"> BMC Moodle,  </a>
+  <a target="about:blank" href="http://www.brynmawr.edu/physics/"> BMC Physics, </a>
+  <a target="about:blank" href="https://www.python.org/doc/"> Python, </a>
+  <a target="about:blank" href="  http://matplotlib.org/index.html"> matplotlib, </a>
+  <a target="about:blank" href="https://serendip.brynmawr.edu/oneworld/tides/explore"> TIDES on Serendip, </a>
+  <a target="about:blank" href="http://scikit-learn.org/stable/"> scikit-learn, </a>
+
+</div>
+
+{% endblock %}
