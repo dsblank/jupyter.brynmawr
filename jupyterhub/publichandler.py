@@ -147,7 +147,11 @@ class PublicHandler(BaseHandler):
             raise web.HTTPError(404)
 
     def get_current_user_name(self):
-        return self.get_current_user().name
+        user = self.get_current_user()
+        if user:
+            return user.name
+        else:
+            return None
 
     def copy_file(self, user, filename, current_user):
         ## filename can have a path on it
