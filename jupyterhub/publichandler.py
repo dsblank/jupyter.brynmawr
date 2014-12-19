@@ -53,8 +53,8 @@ class PublicHandler(BaseHandler):
                 elif command == "download": # download notebook json
                     self.download(user, filename, "text/plain")
                 elif command == "copy": # copy notebook json, if logged in
-                    if self.get_current_user():
-                        self.copy_file(user, filename, self.get_current_user())
+                    if self.get_current_user_name():
+                        self.copy_file(user, filename, self.get_current_user_name())
                     else:
                         self.write("Please <a href=\"/hub/login?next=%s\">login</a> to allow copy." % next)
                 else: # raw, just get file contents
@@ -63,8 +63,8 @@ class PublicHandler(BaseHandler):
             else: # some other kind of file
                 # FIXME: how to get all of custom stuff?
                 if command == "copy":
-                    if self.get_current_user():
-                        self.copy_file(user, filename, self.get_current_user())
+                    if self.get_current_user_name():
+                        self.copy_file(user, filename, self.get_current_user_name())
                     else:
                         self.write("Please <a href=\"/hub/login?next=%s\">login</a> to allow copy." % next)
                 else: # whatever, just get or download it
@@ -88,8 +88,8 @@ class PublicHandler(BaseHandler):
             files = glob.glob("/home/%s/Public%s/*" % (user, path))
             self.write("<h1>Jupyter Project at Bryn Mawr College</h1>\n")
             self.write("[<a href=\"/hub/login\">Home</a>] ")
-            if self.get_current_user():
-                self.write("[<a href=\"/user/%(current_user)s/tree\">%(current_user)s</a>] " % {"current_user": self.get_current_user()})
+            if self.get_current_user_name():
+                self.write("[<a href=\"/user/%(current_user)s/tree\">%(current_user)s</a>] " % {"current_user": self.get_current_user_name()})
             self.write("<p/>\n")
             self.write("<p>Public files for <b>%s</b>:</p>\n" % user)
             self.write("<ol>\n")
@@ -103,12 +103,12 @@ class PublicHandler(BaseHandler):
                     file_path, filename = absolute_filename.rsplit("/", 1)
                     variables = {"user": user, "filename": filename, "url_path": url_path, "next": next}
                     if filename.endswith(".ipynb"):
-                        if self.get_current_user():
+                        if self.get_current_user_name():
                             self.write(("<li><a href=\"%(url_path)s/%(filename)s\">%(filename)s</a> "+
                                         "(<a href=\"%(url_path)s/%(filename)s?raw\">raw</a>, " +
                                         "<a href=\"%(url_path)s/%(filename)s?download\">download</a>, " +
                                         "<a href=\"%(url_path)s/%(filename)s?copy\">copy</a>" +
-                                        ((", <a href=\"/user/%s/notebooks/Public/%s\">edit</a>" % (user, filename)) if self.get_current_user() == user else ", edit") +
+                                        ((", <a href=\"/user/%s/notebooks/Public/%s\">edit</a>" % (user, filename)) if self.get_current_user_name() == user else ", edit") +
                                         ")</li>\n") % variables)
                         else:
                             self.write(("<li><a href=\"%(url_path)s/%(filename)s\">%(filename)s</a> "+
@@ -146,6 +146,9 @@ class PublicHandler(BaseHandler):
         else:
             raise web.HTTPError(404)
 
+    def get_current_user_name(self):
+        return self.get_current_user().name
+
     def copy_file(self, user, filename, current_user):
         ## filename can have a path on it
         base_filename = os.path.basename(filename)
@@ -155,8 +158,8 @@ class PublicHandler(BaseHandler):
                 out_fp.write(in_fp.read())
         self.write("<h1>Jupyter Project at Bryn Mawr College</h1>\n")
         self.write("[<a href=\"/hub/login\">Home</a>] ")
-        if self.get_current_user():
-            self.write("[<a href=\"/user/%(current_user)s/tree\">%(current_user)s</a>] " % {"current_user": self.get_current_user()})
+        if self.get_current_user_name():
+            self.write("[<a href=\"/user/%(current_user)s/tree\">%(current_user)s</a>] " % {"current_user": self.get_current_user_name()})
         self.write("<p/>\n")
         self.write("<p>Copy completed! You'll find your copy in your Incoming folder.</p>")
         self.write("<hr>\n")
