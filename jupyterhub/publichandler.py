@@ -96,7 +96,9 @@ class PublicHandler(BaseHandler):
             for absolute_filename in sorted(files):
                 if os.path.isdir(absolute_filename): 
                     dir_path, dir_name = absolute_filename.rsplit("/", 1)
-                    self.write("<li><a href=\"%(url_path)s/%(dir_path)s\">%(dir_name)s</a></li>\n" % {"url_path": url_path, "dir_name": dir_name})
+                    self.write("<li><a href=\"%(url_path)s/%(dir_path)s\">%(dir_name)s</a></li>\n" % {"url_path": url_path, 
+                                                                                                      "dir_name": dir_name,
+                                                                                                      "dir_path": dir_path})
                 else:
                     file_path, filename = absolute_filename.rsplit("/", 1)
                     variables = {"user": user, "filename": filename, "url_path": url_path, "next": next}
