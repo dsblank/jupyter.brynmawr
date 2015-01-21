@@ -1,8 +1,8 @@
-jupyter.physics
+jupyter.brynmawr
 ===============
 
-Templates and custom config for Bryn Mawr College Physics Jupyterhub server
+Templates, features, and custom config for Bryn Mawr College Jupyterhub servers.
 
-Use:
+Example use:
 
- jupyterhub --JupyterHub.data_files_path="/home/location/jupyter.physics"
+ jupyterhub --JupyterHub.data_files_path="/home/location/jupyter.brynmawr"
