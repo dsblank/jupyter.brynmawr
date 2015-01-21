@@ -1,0 +1,21 @@
+{% extends "templates/notebook.html" %}
+
+{% block stylesheet %}
+
+{{super()}}
+
+<script>
+require(["base/js/events"], function (events) {
+    events.on("app_initialized.NotebookApp", function () {
+        IPython.load_extensions("calico-publish");
+        IPython.load_extensions("calico-spell-check");
+        IPython.load_extensions("calico-document-tools");
+        IPython.load_extensions("calico-cell-tools");
+        // INSTALL MAGIC
+        // To turn off automatically creating closing parenthesis and bracket:
+        // IPython.CodeCell.options_default.cm_config["autoCloseBrackets"] = "";
+    });
+});
+</scipt>
+
+{% endblock %}

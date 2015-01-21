@@ -1,0 +1,9 @@
+
+cd /etc/jupyterhub
+
+#jupyterhub --JupyterHub.spawner=sudospawner.SudoSpawner --JupyterHub.ip=165.106.10.85 --JupyterHub.port=80 '--NotebookApp.extra_template_paths=["/home/dblank/jupyter.physics/templates"]' &>> /var/log/jupyter/log.txt &
+
+#jupyterhub --JupyterHub.spawner=sudospawner.SudoSpawner --JupyterHub.ip=165.106.10.85 --JupyterHub.port=80 '--NotebookApp.extra_template_paths=["/home/dblank/jupyter.physics/templates"]' &
+
+jupyterhub --JupyterHub.spawner=sudospawner.SudoSpawner --JupyterHub.ip=165.106.10.85 --JupyterHub.port=80  --JupyterHub.data_files_path='/home/dblank/jupyter.physics' >> /var/log/jupyterhub/log.txt 2>&1 &
+
