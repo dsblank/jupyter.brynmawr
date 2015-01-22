@@ -4,6 +4,7 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
+import atexit
 import binascii
 import logging
 import os
@@ -13,8 +14,6 @@ from datetime import datetime
 from distutils.version import LooseVersion as V
 from getpass import getuser
 from subprocess import Popen
-
-from . publichandler import PublicHandler
 
 if sys.version_info[:2] < (3,3):
     raise ValueError("Python < 3.3 not supported: %s" % sys.version)
@@ -55,6 +54,8 @@ from .utils import (
 from .auth import Authenticator, PAMAuthenticator
 from .spawner import Spawner, LocalProcessSpawner
 
+from . publichandler import PublicHandler
+
 aliases = {
     'log-level': 'Application.log_level',
     'f': 'JupyterHub.config_file',
@@ -81,6 +82,44 @@ flags = {
 
 SECRET_BYTES = 2048 # the number of bytes to use when generating new secrets
 
+class NewToken(Application):
+    """Generate and print a new API token"""
+    name = 'jupyterhub-token'
+    description = """Generate and return new API token for a user.
+    
+    Usage:
+    
+        jupyterhub token [username]
+    """
+    
+    examples = """
+        $> jupyterhub token kaylee
+        ab01cd23ef45
+    """
+    
+    name = Unicode(getuser())
+    
+    def parse_command_line(self, argv=None):
+        super().parse_command_line(argv=argv)
+        if not self.extra_args:
+            return
+        if len(self.extra_args) > 1:
+            print("Must specify exactly one username", file=sys.stderr)
+            self.exit(1)
+        self.name = self.extra_args[0]
+    
+    def start(self):
+        hub = JupyterHub(parent=self)
+        hub.init_db()
+        hub.init_users()
+        user = orm.User.find(hub.db, self.name)
+        if user is None:
+            print("No such user: %s" % self.name)
+            self.exit(1)
+        token = user.new_api_token()
+        print(token)
+
+
 class JupyterHub(Application):
     """An Application for starting a Multi-User Jupyter Notebook server."""
     name = 'jupyterhub'
@@ -106,6 +145,10 @@ class JupyterHub(Application):
     aliases = Dict(aliases)
     flags = Dict(flags)
     
+    subcommands = {
+        'token': (NewToken, "Generate an API token for a user")
+    }
+    
     classes = List([
         Spawner,
         LocalProcessSpawner,
@@ -127,7 +170,7 @@ class JupyterHub(Application):
         Useful for daemonizing jupyterhub.
         """
     )
-    last_activity_interval = Integer(600, config=True,
+    last_activity_interval = Integer(300, config=True,
         help="Interval (in seconds) at which to update last-activity timestamps."
     )
     proxy_check_interval = Integer(30, config=True,
@@ -135,7 +178,7 @@ class JupyterHub(Application):
     )
     
     data_files_path = Unicode(DATA_FILES_PATH, config=True,
-        help="The location of jupyter data files (e.g. /usr/local/share/jupyter)"
+        help="The location of jupyterhub data files (e.g. /usr/local/share/jupyter/hub)"
     )
     
     ssl_key = Unicode('', config=True,
@@ -246,7 +289,7 @@ class JupyterHub(Application):
     
     authenticator = Instance(Authenticator)
     def _authenticator_default(self):
-        return self.authenticator_class(config=self.config)
+        return self.authenticator_class(parent=self, db=self.db)
 
     # class for spawning single-user servers
     spawner_class = Type(LocalProcessSpawner, Spawner,
@@ -453,6 +496,7 @@ class JupyterHub(Application):
 
         self.db.commit()
     
+    @gen.coroutine
     def init_users(self):
         """Load users into and from the database"""
         db = self.db
@@ -462,12 +506,15 @@ class JupyterHub(Application):
             admins = db.query(orm.User).filter(orm.User.admin==True)
             if admins.first() is None:
                 self.admin_users.add(getuser())
+        
+        new_users = []
 
         for name in self.admin_users:
             # ensure anyone specified as admin in config is admin in db
             user = orm.User.find(db, name)
             if user is None:
                 user = orm.User(name=name, admin=True)
+                new_users.append(user)
                 db.add(user)
             else:
                 user.admin = True
@@ -485,6 +532,7 @@ class JupyterHub(Application):
             user = orm.User.find(db, name)
             if user is None:
                 user = orm.User(name=name)
+                new_users.append(user)
                 db.add(user)
 
         if whitelist:
@@ -501,10 +549,11 @@ class JupyterHub(Application):
         # to the whitelist set and user db, unless the whitelist is empty (all users allowed).
 
         db.commit()
-
-        # load any still-active spawners from JSON
-        run_sync = IOLoop().run_sync
-
+        
+        for user in new_users:
+            yield self.authenticator.add_user(user)
+        db.commit()
+        
         user_summaries = ['']
         def _user_summary(user):
             parts = ['{0: >8}'.format(user.name)]
@@ -531,9 +580,9 @@ class JupyterHub(Application):
                 continue
             self.log.debug("Loading state for %s from db", user.name)
             user.spawner = spawner = self.spawner_class(
-                user=user, hub=self.hub, config=self.config,
+                user=user, hub=self.hub, config=self.config, db=self.db,
             )
-            status = run_sync(spawner.poll)
+            status = yield spawner.poll()
             if status is None:
                 self.log.info("%s still running", user.name)
                 spawner.add_poll_callback(user_stopped, user)
@@ -688,10 +737,11 @@ class JupyterHub(Application):
             with open(self.pid_file, 'w') as f:
                 f.write('%i' % pid)
     
+    @gen.coroutine
     @catch_config_error
     def initialize(self, *args, **kwargs):
         super().initialize(*args, **kwargs)
-        if self.generate_config:
+        if self.generate_config or self.subapp:
             return
         self.load_config_file(self.config_file)
         self.init_logging()
@@ -710,7 +760,7 @@ class JupyterHub(Application):
         self.init_db()
         self.init_hub()
         self.init_proxy()
-        self.init_users()
+        yield self.init_users()
         self.init_handlers()
         self.init_tornado_settings()
         self.init_tornado_application()
@@ -793,21 +843,30 @@ class JupyterHub(Application):
             user.last_activity = max(user.last_activity, dt)
 
         self.db.commit()
-
+    
+    @gen.coroutine
     def start(self):
         """Start the whole thing"""
+        loop = IOLoop.current()
+        
+        if self.subapp:
+            self.subapp.start()
+            loop.stop()
+            return
+        
         if self.generate_config:
             self.write_config_file()
+            loop.stop()
             return
         
         # start the proxy
         try:
-            IOLoop().run_sync(self.start_proxy)
+            yield self.start_proxy()
         except Exception as e:
             self.log.critical("Failed to start proxy", exc_info=True)
+            self.exit(1)
             return
         
-        loop = IOLoop.current()
         loop.add_callback(self.proxy.add_all_users)
         
         if self.proxy_process:
@@ -824,14 +883,24 @@ class JupyterHub(Application):
         # start the webserver
         http_server = tornado.httpserver.HTTPServer(self.tornado_application)
         http_server.listen(self.hub_port)
+        # run the cleanup step (in a new loop, because the interrupted one is unclean)
         
+        atexit.register(lambda : IOLoop().run_sync(self.cleanup))
+    
+    @gen.coroutine
+    def launch_instance_async(self, argv=None):
+        yield self.initialize(argv)
+        yield self.start()
+    
+    @classmethod
+    def launch_instance(cls, argv=None):
+        self = cls.instance(argv=argv)
+        loop = IOLoop.current()
+        loop.add_callback(self.launch_instance_async, argv)
         try:
             loop.start()
         except KeyboardInterrupt:
             print("\nInterrupted")
-        finally:
-            # run the cleanup step (in a new loop, because the interrupted one is unclean)
-            IOLoop().run_sync(self.cleanup)
 
 main = JupyterHub.launch_instance
 
