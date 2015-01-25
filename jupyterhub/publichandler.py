@@ -3,6 +3,7 @@ from tornado.log import app_log
 
 import IPython.nbformat as nbformat
 from IPython.nbconvert.exporters import HTMLExporter, PDFExporter
+from IPython.nbformat.v4 import new_markdown_cell
 
 import re
 import os
@@ -46,12 +47,55 @@ class PublicHandler(BaseHandler):
                     #    for cell in nb_json["worksheets"][0]["cells"]:
                     #        if cell["cell_type"] == "heading":
                     #            cell["source"] = re.sub("^([0-9]+\.?)+\s", "", cell["source"])
-                    (body, resources) = exporter.from_notebook_node(nb_json)
                     # where to get css, images?
                     if command == "pdf":
                         self.set_header('Content-Type', "application/pdf")
                         base_filename = os.path.basename(filename)
                         self.set_header('Content-Disposition', 'attachment; filename="%s"' % base_filename)
+                    else: # render as HTML
+                        # add header/footer:
+                        path = "/hub/%s/public" % user
+                        parts = [(path, path)]
+                        for part in filename.split("/")[:-1]:
+                            path += "/" + part
+                            parts.append((path, part))
+                        breadcrumbs = " / ".join(map(lambda pair: '<a href="%s" target="_blank">%s</a>' % pair, parts))
+                        env = {
+                            "breadcrumbs": breadcrumbs,
+                            "url": path + "/" + filename + "?download"
+                        }
+                        cell = new_markdown_cell(source="""
+<table width="100%" style="border: none;">
+<tr style="border: none;">
+  <td style="border: none;" width="100px">
+    <img src="https://serendip.brynmawr.edu/oneworld/files/styles/thumbnail/public/pictures/SerendipStudioAvatar.png?itok=48Z_omRv"/> 
+  </td>
+  <td style="border: none;" width="50%">
+    <h2><a href="https://serendip.brynmawr.edu/oneworld/tides/explore">TIDES: Teaching to Increase Diversity and Equity in STEM</a></h2>
+  </td>
+  <td style="border: none;">
+        <a href="http://jupyter.physics.brynmawr.edu/hub/dblank/public/Jupyter%20Help.ipynb" title="Help">
+            <span class='fa fa-info-circle fa-2x menu-icon'></span>
+            <span class='menu-text'>Help</span>
+        </a>
+  </td>
+  <td style="border: none;">
+        <a href="{url}" title="Download Notebook" download>
+            <span class='fa fa-download fa-2x menu-icon'></span>
+            <span class='menu-text'>Download Notebook</span>
+        </a>
+  </td>
+</tr>
+<tr style="border: none;">
+  <td colspan="4" style="border: none;">
+      <b>Public notebooks:</b> {breadcrumbs}
+  </td>
+</tr>
+</table>
+<hr style="background-color: #534f9a; height: 5px; border: 0; ">
+""".format(**env))
+                        nb_json["cells"].insert(0, cell)
+                    (body, resources) = exporter.from_notebook_node(nb_json)
                     self.write(body)
                 elif command == "download": # download notebook json
                     self.download(user, filename, "text/plain")
