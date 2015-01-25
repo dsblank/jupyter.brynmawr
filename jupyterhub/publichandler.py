@@ -1,4 +1,5 @@
 from tornado import gen, web
+from tornado.log import app_log
 
 import IPython.nbformat as nbformat
 from IPython.nbconvert.exporters import HTMLExporter, PDFExporter
@@ -7,6 +8,7 @@ import re
 import os
 import glob
 import mimetypes
+import shutil
 
 from .handlers.base import BaseHandler
 
@@ -71,22 +73,26 @@ class PublicHandler(BaseHandler):
                 else: # whatever, just get or download it
                     base_filename = os.path.basename(filename)
                     base, ext = os.path.splitext(base_filename)
+                    app_log.info("extension is: %s" % ext)
                     if base_filename == "custom.css":
                         file_path = "/home/%s/.ipython/profile_default/static/custom/custom.css" % user
                         self.set_header('Content-Type', "text/css")
                         with open(file_path, "rb") as fp:
                             self.write(fp.read())
-                    elif ext in ["txt", "html", "js", "css", "pdf"]: # show in browser
-                        self.set_header('Content-Type', mimetypes.guess_type(filename))
+                    elif ext in [".txt", ".html", ".js", ".css", ".pdf", ".gif", ".jpeg", ".jpg", ".png"]: # show in browser
+                        app_log.info("mime: %s" % str(mimetypes.guess_type(filename)[0]))
+                        self.set_header('Content-Type', mimetypes.guess_type(filename)[0])
                         with open("/home/%s/Public/%s" % (user, filename), "rb") as fp:
                             self.write(fp.read())
                     else:
                         self.download(user, filename)
-        else: # directory listing
+        else: # not a file; directory listing
             # filename can have a full path, and might be empty
             url_path = "/hub/%s/public" % user
-            path, base_filename = os.path.split(filename)
-            files = glob.glob("/home/%s/Public%s/*" % (user, path))
+            # could be: images, images/, images/subdir, images/subdir/
+            if not filename.endswith("/") and filename.strip() != "":
+                filename += "/"
+            files = glob.glob("/home/%s/Public/%s*" % (user, filename))
             self.write("<h1>Jupyter Project at Bryn Mawr College</h1>\n")
             self.write("[<a href=\"/hub/login\">Home</a>] ")
             if self.get_current_user_name():
@@ -160,17 +166,23 @@ class PublicHandler(BaseHandler):
             return None
 
     def copy_file(self, user, filename, current_user):
-        ## filename can have a path on it
-        base_filename = os.path.basename(filename)
-        with open("/home/%s/Public/%s" % (user, filename), "rb") as in_fp:
-            # FIXME: write to root, new version to not overwrite old
-            with open("/home/%s/Incoming/%s" % (current_user, base_filename), "wb") as out_fp:
-                out_fp.write(in_fp.read())
+        src = "/home/%s/Public/%s" % (user, filename)
+        dst = "/home/%s/Incoming/%s" % (current_user, filename)
+        path, base_filename = os.path.split(dst)
+        # Create the path of the dst if dirs do not exist: 
+        try: 
+            os.makedirs(path) 
+        except OSError as exc: # Python >2.5 
+            if exc.errno == errno.EEXIST and os.path.isdir(path):
+                pass
+            else:
+                raise
+        shutil.copyfile(src, dst)
         self.write("<h1>Jupyter Project at Bryn Mawr College</h1>\n")
         self.write("[<a href=\"/hub/login\">Home</a>] ")
         if self.get_current_user_name():
             self.write("[<a href=\"/user/%(current_user)s/tree\">%(current_user)s</a>] " % {"current_user": self.get_current_user_name()})
         self.write("<p/>\n")
-        self.write("<p>Copy completed! You'll find your copy in your Incoming folder.</p>")
+        self.write("<p>Copy completed! You'll find your copy in your <a href=\"/user/%s/notebooks/Incoming/%s\">~/Incoming/%s</a>.</p>" % (current_user, filename, filename))
         self.write("<hr>\n")
         self.write("<p><i>Please see <a href=\"/hub/dblank/public/Jupyter Help.ipynb\">Jupyter Help</a> for more information about this server.</i></p>\n")
