@@ -40,8 +40,8 @@ class PublicHandler(BaseHandler):
                         exporter = HTMLExporter(template_file='full')
                     else:
                         exporter = PDFExporter(latex_count=1)
-                    with open("/home/%s/Public/%s" % (user, filename)) as fp:
-                        nb_json = nbformat.read(fp, as_version=4)
+                    
+                    nb_json = nbformat.read("/home/%s/Public/%s" % (user, filename), as_version=4)
                     #if command == "pdf":
                     #    # If pdf, remove heading numbering:
                     #    for cell in nb_json["worksheets"][0]["cells"]:
