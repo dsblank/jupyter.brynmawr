@@ -1,9 +1,12 @@
 from tornado import gen, web
 from tornado.log import app_log
 
-import IPython.nbformat as nbformat
-from IPython.nbconvert.exporters import HTMLExporter, PDFExporter
-from IPython.nbformat.v4 import new_markdown_cell
+#import IPython.nbformat as nbformat
+import nbformat
+#from IPython.nbconvert.exporters import HTMLExporter, PDFExporter
+from nbconvert.exporters import HTMLExporter, PDFExporter
+#from IPython.nbformat.v4 import new_markdown_cell
+from nbformat.v4 import new_markdown_cell
 
 import re
 import os
@@ -14,10 +17,10 @@ import shutil
 from .handlers.base import BaseHandler
 
 class PublicHandler(BaseHandler):
-    def get(self, user, filename):
+    def get(self, prepath, user, filename):
         ## filename can have a path on it
-        next = "/hub/%s/public/%s" % (user, filename)
-        filesystem_path = "/home/%s/Public/%s" % (user, filename)
+        next = "/%s/hub/%s/public/%s" % (prepath, user, filename)
+        filesystem_path = "/home/%s/public_html/%s" % (user, filename)
         if os.path.isfile(filesystem_path): # download, raw, or view notebook
             command = "view"
             if len(self.get_arguments("view")) > 0:
@@ -34,14 +37,14 @@ class PublicHandler(BaseHandler):
             if filename.endswith(".ipynb"):
                 if command in ["view", "pdf"]:
                     # first, make a notebook html:
-                    #with open("/home/%s/Public/%s" % (user, filename)) as fp:
+                    #with open("/home/%s/public_html/%s" % (user, filename)) as fp:
                     #    notebook_content = fp.read()
                     if command == "view":
-                        exporter = HTMLExporter(template_file='full')
+                        exporter = HTMLExporter(template_file='full-tabs')
                     else:
                         exporter = PDFExporter(latex_count=1)
                     
-                    nb_json = nbformat.read("/home/%s/Public/%s" % (user, filename), as_version=4)
+                    nb_json = nbformat.read("/home/%s/public_html/%s" % (user, filename), as_version=4)
                     #if command == "pdf":
                     #    # If pdf, remove heading numbering:
                     #    for cell in nb_json["worksheets"][0]["cells"]:
@@ -54,7 +57,7 @@ class PublicHandler(BaseHandler):
                         self.set_header('Content-Disposition', 'attachment; filename="%s"' % base_filename)
                     else: # render as HTML
                         # add header/footer:
-                        path = "/hub/%s/public" % user
+                        path = "/%s/hub/%s/public" % (prepath, user)
                         parts = [(path, path)]
                         for part in filename.split("/")[:-1]:
                             path += "/" + part
@@ -62,27 +65,26 @@ class PublicHandler(BaseHandler):
                         breadcrumbs = " / ".join(map(lambda pair: '<a href="%s" target="_blank">%s</a>' % pair, parts))
                         env = {
                             "breadcrumbs": breadcrumbs,
-                            "url": path + "/" + filename + "?download"
+                            "url": "https://athena.brynmawr.edu/" + next + "?download"
                         }
-                        cell = new_markdown_cell(source="""
-<table width="100%" style="border: none;">
+                        cell = new_markdown_cell(source="""<table width="100%" style="border: none;">
 <tr style="border: none;">
   <td style="border: none;" width="100px">
-    <img src="https://serendip.brynmawr.edu/oneworld/files/styles/thumbnail/public/pictures/SerendipStudioAvatar.png?itok=48Z_omRv"/> 
+    <img src="https://blog.jupyter.org/content/images/2015/02/jupyter-sq-text.png" width="100"/> 
   </td>
   <td style="border: none;" width="50%">
-    <h2><a href="https://serendip.brynmawr.edu/oneworld/tides/explore">TIDES: Teaching to Increase Diversity and Equity in STEM</a></h2>
+    <h2><a href="https://athena.brynmawr.edu/">Jupyter at Bryn Mawr College</a></h2>
   </td>
   <td style="border: none;">
-        <a href="http://jupyter.physics.brynmawr.edu/hub/dblank/public/Jupyter%20Help.ipynb" title="Help">
-            <span class='fa fa-info-circle fa-2x menu-icon'></span>
-            <span class='menu-text'>Help</span>
+        <a href="https://athena.brynmawr.edu/jupyter/hub/dblank/public/Jupyter%20Help.ipynb" title="Help">
+            <span class="fa fa-info-circle fa-2x menu-icon"></span>
+            <span class="menu-text">Help</span>
         </a>
   </td>
   <td style="border: none;">
         <a href="{url}" title="Download Notebook" download>
-            <span class='fa fa-download fa-2x menu-icon'></span>
-            <span class='menu-text'>Download Notebook</span>
+            <span class="fa fa-download fa-2x menu-icon"></span>
+            <span class="menu-text">Download Notebook</span>
         </a>
   </td>
 </tr>
@@ -91,9 +93,7 @@ class PublicHandler(BaseHandler):
       <b>Public notebooks:</b> {breadcrumbs}
   </td>
 </tr>
-</table>
-<hr style="background-color: #534f9a; height: 5px; border: 0; ">
-""".format(**env))
+</table>""".format(**env))
                         nb_json["cells"].insert(0, cell)
                     (body, resources) = exporter.from_notebook_node(nb_json)
                     self.write(body)
@@ -103,9 +103,9 @@ class PublicHandler(BaseHandler):
                     if self.get_current_user_name():
                         self.copy_file(user, filename, self.get_current_user_name())
                     else:
-                        self.write("Please <a href=\"/hub/login?next=%s\">login</a> to allow copy." % next)
+                        self.write("Please <a href=\"/%s/hub/login?next=%s\">login</a> to allow copy." % (prepath, next))
                 else: # raw, just get file contents
-                    with open("/home/%s/Public/%s" % (user, filename), "rb") as fp:
+                    with open("/home/%s/public_html/%s" % (user, filename), "rb") as fp:
                         self.write(fp.read())
             else: # some other kind of file
                 # FIXME: how to get all of custom stuff?
@@ -113,7 +113,7 @@ class PublicHandler(BaseHandler):
                     if self.get_current_user_name():
                         self.copy_file(user, filename, self.get_current_user_name())
                     else:
-                        self.write("Please <a href=\"/hub/login?next=%s\">login</a> to allow copy." % next)
+                        self.write("Please <a href=\"/%s/hub/login?next=%s\">login</a> to allow copy." % (prepath, next))
                 else: # whatever, just get or download it
                     base_filename = os.path.basename(filename)
                     base, ext = os.path.splitext(base_filename)
@@ -126,61 +126,71 @@ class PublicHandler(BaseHandler):
                     elif ext in [".txt", ".html", ".js", ".css", ".pdf", ".gif", ".jpeg", ".jpg", ".png"]: # show in browser
                         app_log.info("mime: %s" % str(mimetypes.guess_type(filename)[0]))
                         self.set_header('Content-Type', mimetypes.guess_type(filename)[0])
-                        with open("/home/%s/Public/%s" % (user, filename), "rb") as fp:
+                        with open("/home/%s/public_html/%s" % (user, filename), "rb") as fp:
                             self.write(fp.read())
                     else:
                         self.download(user, filename)
         else: # not a file; directory listing
             # filename can have a full path, and might be empty
-            url_path = "/hub/%s/public" % user
+            url_path = "/%s/hub/%s/public" % (prepath, user)
+
+            ##
+            path = "/%s/hub/%s/public" % (prepath, user)
+            parts = [(path, path)]
+            for part in filename.split("/")[:]:
+                path += "/" + part
+                parts.append((path, part))
+            breadcrumbs = " / ".join(map(lambda pair: '<a href="%s" target="_blank">%s</a>' % pair, parts))
+            ##
             # could be: images, images/, images/subdir, images/subdir/
             if not filename.endswith("/") and filename.strip() != "":
                 filename += "/"
-            files = glob.glob("/home/%s/Public/%s*" % (user, filename))
+            files = glob.glob("/home/%s/public_html/%s*" % (user, filename))
             self.write("<h1>Jupyter Project at Bryn Mawr College</h1>\n")
-            self.write("[<a href=\"/hub/login\">Home</a>] ")
+            self.write("[<a href=\"/jupyter/hub/login\">Home</a>] ")
             if self.get_current_user_name():
                 self.write("[<a href=\"/user/%(current_user)s/tree\">%(current_user)s</a>] " % {"current_user": self.get_current_user_name()})
             self.write("<p/>\n")
-            self.write("<p>Public files for <b>/hub/%s/public/%s</b>:</p>\n" % (user, filename))
+            self.write("<p>Public notebooks: %s </p>\n" % breadcrumbs)
             self.write("<ol>\n")
             for absolute_filename in sorted(files):
                 if os.path.isdir(absolute_filename): 
                     dir_path = absolute_filename.split("/")
                     dir_name = dir_path[-1]
-                    public_path = "/".join(dir_path[dir_path.index("Public") + 1:])
+                    public_path = "/".join(dir_path[dir_path.index("public_html") + 1:])
                     self.write("<li><a href=\"%(url_path)s/%(public_path)s\">%(dir_name)s</a></li>\n" % {"url_path": url_path, 
                                                                                                       "dir_name": dir_name,
                                                                                                       "public_path": public_path})
                 else:
                     file_path, filename = absolute_filename.rsplit("/", 1)
                     dir_path = absolute_filename.split("/")
-                    public_path = "/".join(dir_path[dir_path.index("Public") + 1:])
+                    public_path = "/".join(dir_path[dir_path.index("public_html") + 1:])
                     variables = {"user": user, "filename": filename, "url_path": url_path, "next": next,
                                  "public_path": public_path}
                     if filename.endswith(".ipynb"):
                         if self.get_current_user_name():
                             self.write(("<li><a href=\"%(url_path)s/%(public_path)s\">%(filename)s</a> "+
-                                        "(<a href=\"%(url_path)s/%(public_path)s?raw\">raw</a>, " +
-                                        "<a href=\"%(url_path)s/%(public_path)s?download\">download</a>, " +
-                                        "<a href=\"%(url_path)s/%(public_path)s?copy\">copy</a>" +
-                                        ((", <a href=\"/user/%s/notebooks/Public/%s\">edit</a>" % (user, filename)) if self.get_current_user_name() == user else ", edit") +
+                                        #"(<a href=\"%(url_path)s/%(public_path)s?raw\">raw</a>, " +
+                                        "(<a href=\"%(url_path)s/%(public_path)s?download\">download</a>" +
+                                        #"<a href=\"%(url_path)s/%(public_path)s?copy\">copy</a>" +
+                                        #((", <a href=\"/user/%s/notebooks/public_html/%s\">edit</a>" % (user, filename)) if self.get_current_user_name() == user else ", edit") +
                                         ")</li>\n") % variables)
                         else:
                             self.write(("<li><a href=\"%(url_path)s/%(public_path)s\">%(filename)s</a> "+
-                                        "(<a href=\"%(url_path)s/%(public_path)s?raw\">raw</a>, " +
-                                        "<a href=\"%(url_path)s/%(public_path)s?download\">download</a>, " +
-                                        "copy, edit) " +
-                                        "[<a href=\"/hub/login?next=%(next)s\">login</a> to copy]</li>\n") % variables)
+                                        #"(<a href=\"%(url_path)s/%(public_path)s?raw\">raw</a>, " +
+                                        "(<a href=\"%(url_path)s/%(public_path)s?download\">download</a>)" +
+                                        #"copy, edit) " +
+                                        #"[<a href=\"/jupyter/hub/login?next=%(next)s\">login</a> to copy]</li>\n") % variables)
+                                        "</li>\n") % variables)
                     else:
                         # some other kind of file (eg, .zip, .css):
                         self.write("<li><a href=\"%(url_path)s/%(public_path)s\">%(filename)s</a></li>\n" % variables)
             self.write("</ol>\n")
             self.write("<hr>\n")
-            self.write("<p><i>Please see <a href=\"/hub/dblank/public/Jupyter Help.ipynb\">Jupyter Help</a> for more information about this server.</i></p>\n")
+            self.write("<p><i>Please see <a href=\"/jupyter/hub/dblank/public/Jupyter Help.ipynb\">Jupyter Help</a> for more information about this server.</i></p>\n")
 
     def download(self, user, filename, mime_type=None):
-        self.download_file(filename, "/home/%s/Public/%s" % (user, filename), mime_type)
+        self.download_file(filename, "/home/%s/public_html/%s" % (user, filename), mime_type)
 
     def download_file(self, filename, file_path, mime_type=None):
         # just download it
@@ -188,6 +198,8 @@ class PublicHandler(BaseHandler):
         if os.path.exists(file_path):
             if mime_type is None:
                 mime_type, encoding = mimetypes.guess_type(filename)
+            if mime_type is None:
+                mime_type = "text/plain"
             base_filename = os.path.basename(filename)
             self.set_header('Content-Type', mime_type)
             self.set_header('Content-Disposition', 'attachment; filename="%s"' % base_filename)
@@ -210,7 +222,7 @@ class PublicHandler(BaseHandler):
             return None
 
     def copy_file(self, user, filename, current_user):
-        src = "/home/%s/Public/%s" % (user, filename)
+        src = "/home/%s/public_html/%s" % (user, filename)
         dst = "/home/%s/Incoming/%s" % (current_user, filename)
         path, base_filename = os.path.split(dst)
         # Create the path of the dst if dirs do not exist: 
@@ -223,10 +235,10 @@ class PublicHandler(BaseHandler):
                 raise
         shutil.copyfile(src, dst)
         self.write("<h1>Jupyter Project at Bryn Mawr College</h1>\n")
-        self.write("[<a href=\"/hub/login\">Home</a>] ")
+        self.write("[<a href=\"/jupyter/hub/login\">Home</a>] ")
         if self.get_current_user_name():
             self.write("[<a href=\"/user/%(current_user)s/tree\">%(current_user)s</a>] " % {"current_user": self.get_current_user_name()})
         self.write("<p/>\n")
         self.write("<p>Copy completed! You'll find your copy in your <a href=\"/user/%s/notebooks/Incoming/%s\">~/Incoming/%s</a>.</p>" % (current_user, filename, filename))
         self.write("<hr>\n")
-        self.write("<p><i>Please see <a href=\"/hub/dblank/public/Jupyter Help.ipynb\">Jupyter Help</a> for more information about this server.</i></p>\n")
+        self.write("<p><i>Please see <a href=\"/jupyter/hub/dblank/public/Jupyter Help.ipynb\">Jupyter Help</a> for more information about this server.</i></p>\n")
